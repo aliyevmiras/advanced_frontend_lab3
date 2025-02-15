@@ -1,0 +1,435 @@
+<%- contentFor('body') %>
+<div class="assignment-content">
+    <h1>Interactive Visualization with D3.js</h1>
+    
+    <div class="assignment-details">
+        <h2>Assignment Overview</h2>
+        <ul>
+            <li>Select a data set (e.g., weather, economic, social media data).</li>
+            <li>Create a complex visualization that combines multiple chart types (line charts, pie charts, cartograms).</li>
+            <li>Implement interactive elements: tooltips, zooming, filtering, animation.</li>
+        </ul>
+    </div>
+
+    <p>Dataset of city entertainment places (restaurants, theaters, cultural venues per capita) of KZ <a href="https://github.com/open-data-kazakhstan/city-entertainment-places/tree/main/data">source</a></p>
+    
+    <div class="chart-controls">
+        <label for="region-filter">Filter Regions:</label>
+        <select class="form-select" id="region-filter" >
+            <option value="">All Regions</option>
+            <option value="city">Cities Only</option>
+            <option value="region">Regions Only</option>
+        </select>
+        
+        <button id="sort-asc" class="btn btn-primary btn-sm">Sort Ascending</button>
+        <button id="sort-desc" class="btn btn-primary btn-sm">Sort Descending</button>
+        <button id="sort-reset" class="btn btn-primary btn-sm">Reset</button>
+    </div>
+
+
+    <div id="vertical-chart"></div>
+    <div id="horizontal-chart"></div>
+
+    <div id="cartogram"></div>
+    <div class="legend" id="legend"></div>
+
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3js.org/topojson.v3.min.js"></script>
+<script>
+    const csvData = [
+        {Region: "The Republic Of Kazakhstan", Rate: 0.3913988583053158},
+        {Region: "Abai Region", Rate: 0.4621518906437186},
+        {Region: "Akmola Region", Rate: 0.7893691519104129},
+        {Region: "Aktobe Region", Rate: 0.5117514288638579},
+        {Region: "Almaty Region", Rate: 0.18592495006587056},
+        {Region: "Atyrau Region", Rate: 0.3708299665242987},
+        {Region: "West Kazakhstan Region", Rate: 0.9809749001222222},
+        {Region: "Jambyl Region", Rate: 0.4211978275059423},
+        {Region: "Jetisu Region", Rate: 0.4336780334204029},
+        {Region: "Karaganda Region", Rate: 0.49438071545085144},
+        {Region: "Kostanay Region", Rate: 0.7378832125560323},
+        {Region: "Kyzylorda Region", Rate: 0.4834853172827405},
+        {Region: "Mangystau Region", Rate: 0.17732438366738118},
+        {Region: "Pavlodar Region", Rate: 0.7047263025845705},
+        {Region: "North Kazakhstan Region", Rate: 1.0992015340134527},
+        {Region: "Turkistan Region", Rate: 0.33363802775094464},
+        {Region: "Ulytau Region", Rate: 0.4923327085074189},
+        {Region: "East Kazakhstan Region", Rate: 0.49714313887686734},
+        {Region: "Astana city", Rate: 0.05906521907658913},
+        {Region: "Almaty city", Rate: 0.06337619321874732},
+        {Region: "Shymkent city", Rate: 0.07718917304386275}
+    ];
+
+    // Chart dimensions
+    const margin = {top: 20, right: 20, bottom: 150, left: 200};
+    const width = 1000 - margin.left - margin.right;
+    const height = 600 - margin.top - margin.bottom;
+
+    // Vertical Chart
+    function renderVerticalChart(data) {
+        // Clear existing chart
+        d3.select("#vertical-chart").selectAll("*").remove();
+
+        const svg = d3.select("#vertical-chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // X scale
+        const x = d3.scaleBand()
+            .range([0, width])
+            .padding(0.1)
+            .domain(data.map(d => d.Region));
+
+        // Y scale
+        const y = d3.scaleLinear()
+            .range([height, 0])
+            .domain([0, d3.max(data, d => d.Rate)]);
+
+        // Bars
+        svg.selectAll(".bar")
+            .data(data)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("x", d => x(d.Region))
+            .attr("width", x.bandwidth())
+            .attr("y", d => y(d.Rate))
+            .attr("height", d => height - y(d.Rate))
+            .attr("fill", "steelblue")
+            .on("mouseover", function() {
+                d3.select(this).attr("fill", "orange");
+            })
+            .on("mouseout", function() {
+                d3.select(this).attr("fill", "steelblue");
+            });
+
+        // X Axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x))
+            .selectAll("text")
+            .style("text-anchor", "end")
+            .attr("dx", "-.8em")
+            .attr("dy", ".15em")
+            .attr("transform", "rotate(-65)");
+
+        // Y Axis
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        // Y Axis Label
+        svg.append("text")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 0 - margin.left)
+            .attr("x", 0 - (height / 2))
+            .attr("dy", "1em")
+            .style("text-anchor", "middle")
+            .text("Entertainment Places Rate");
+
+        // Chart Title
+        svg.append("text")
+            .attr("x", (width / 2))
+            .attr("y", 0 - (margin.top / 2))
+            .attr("text-anchor", "middle")
+            .style("font-size", "14px")
+            .text("Entertainment places rate by region in Kazakhstan (Vertical)");
+    }
+
+    // Horizontal Chart
+    function renderHorizontalChart(data) {
+        // Clear existing chart
+        d3.select("#horizontal-chart").selectAll("*").remove();
+
+        const svg = d3.select("#horizontal-chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Y scale (now for regions)
+        const y = d3.scaleBand()
+            .range([height, 0])
+            .padding(0.1)
+            .domain(data.map(d => d.Region));
+
+        // X scale
+        const x = d3.scaleLinear()
+            .range([0, width])
+            .domain([0, d3.max(data, d => d.Rate)]);
+
+        // Bars
+        svg.selectAll(".bar")
+            .data(data)
+            .enter().append("rect")
+            .attr("class", "bar")
+            .attr("y", d => y(d.Region))
+            .attr("height", y.bandwidth())
+            .attr("x", 0)
+            .attr("width", d => x(d.Rate))
+            .attr("fill", "steelblue")
+            .on("mouseover", function() {
+                d3.select(this).attr("fill", "orange");
+            })
+            .on("mouseout", function() {
+                d3.select(this).attr("fill", "steelblue");
+            });
+
+        // Y Axis (Regions)
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        // X Axis
+        svg.append("g")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x));
+
+        // X Axis Label
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 50)
+            .style("text-anchor", "middle")
+            .text("Entertainment Places Rate");
+
+        // Chart Title
+        svg.append("text")
+            .attr("x", (width / 2))
+            .attr("y", 0 - (margin.top / 2))
+            .attr("text-anchor", "middle")
+            .style("font-size", "14px")
+            .text("Entertainment places rate by region in Kazakhstan (Horizontal)");
+    }
+
+    // Initial render
+    let currentData = [...csvData];
+    renderVerticalChart(currentData);
+    renderHorizontalChart(currentData);
+
+    // Sorting event listeners
+    d3.select("#sort-asc").on("click", () => {
+        currentData.sort((a, b) => a.Rate - b.Rate);
+        renderVerticalChart(currentData);
+        renderHorizontalChart(currentData);
+    });
+
+    d3.select("#sort-desc").on("click", () => {
+        currentData.sort((a, b) => b.Rate - a.Rate);
+        renderVerticalChart(currentData);
+        renderHorizontalChart(currentData);
+    });
+
+    d3.select("#sort-reset").on("click", () => {
+        currentData = [...csvData];
+        renderVerticalChart(currentData);
+        renderHorizontalChart(currentData);
+    });
+
+    // Filtering event listener
+    d3.select("#region-filter").on("change", function() {
+        const filterValue = this.value;
+        
+        let filteredData;
+        switch(filterValue) {
+            case "city":
+                filteredData = csvData.filter(d => d.Region.includes("city"));
+                break;
+            case "region":
+                filteredData = csvData.filter(d => !d.Region.includes("city") && d.Region !== "The Republic Of Kazakhstan");
+                break;
+            default:
+                filteredData = [...csvData];
+        }
+        
+        currentData = filteredData;
+        renderVerticalChart(currentData);
+        renderHorizontalChart(currentData);
+    });
+
+
+            // We'll use a simplified GeoJSON for Kazakhstan regions
+        // This is a placeholder. In a real implementation, you would use actual GeoJSON for Kazakhstan
+        const widthMap = 900;
+        const heightMap = 600;
+        const marginMap = { top: 20, right: 20, bottom: 20, left: 20 };
+
+        // Create SVG
+        const svg = d3.select("#cartogram")
+            .append("svg")
+            .attr("width", widthMap)
+            .attr("height", heightMap)
+            .attr("viewBox", [0, 0, widthMap, heightMap])
+            .attr("style", "max-width: 100%; height: auto;");
+
+        // Color scale
+        const colorScale = d3.scaleSequential()
+            .domain([0, d3.max(csvData, d => d.Rate)])
+            .interpolator(d3.interpolateBlues);
+
+        // Create tooltip
+        const tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        // Simulated data for demonstration
+        // In a real implementation, you would use topojson.feature() to convert from TopoJSON to GeoJSON
+        const simulatedRegions = csvData.map((d, i) => {
+            const x = 150 + (i % 5) * 150;
+            const y = 100 + Math.floor(i / 5) * 120;
+            const size = Math.sqrt(d.Rate) * 50;
+            
+            return {
+                id: i,
+                name: d.Region,
+                rate: d.Rate,
+                x: x,
+                y: y,
+                size: size
+            };
+        });
+
+        // Draw regions
+        const regions = svg.selectAll(".region")
+            .data(simulatedRegions)
+            .enter()
+            .append("g")
+            .attr("class", "region");
+
+        // Add rectangles for regions
+        regions.append("rect")
+            .attr("x", d => d.x - d.size / 2)
+            .attr("y", d => d.y - d.size / 2)
+            .attr("width", d => d.size)
+            .attr("height", d => d.size)
+            .attr("fill", d => colorScale(d.rate))
+            .attr("stroke", "#333")
+            .attr("stroke-width", 1)
+            .on("mouseover", function(event, d) {
+                d3.select(this).attr("stroke-width", 2);
+                tooltip.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                tooltip.html(`<strong>${d.name}</strong><br>Rate: ${d.rate.toFixed(2)}`)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            })
+            .on("mouseout", function() {
+                d3.select(this).attr("stroke-width", 1);
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            });
+
+        // Add text labels for regions
+        regions.append("text")
+            .attr("x", d => d.x)
+            .attr("y", d => d.y + d.size / 2 + 15)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "10px")
+            .text(d => d.name.length > 15 ? d.name.substring(0, 12) + "..." : d.name);
+
+        // Create legend
+        const legendWidth = 300;
+        const legendHeight = 20;
+        
+        const legend = d3.select("#legend")
+            .append("svg")
+            .attr("width", legendWidth)
+            .attr("height", legendHeight + 30)
+            .append("g")
+            .attr("transform", `translate(0,${10})`);
+
+        // Create gradient for legend
+        const defs = legend.append("defs");
+        const linearGradient = defs.append("linearGradient")
+            .attr("id", "linear-gradient");
+            
+        linearGradient.selectAll("stop")
+            .data(colorScale.ticks().map((t, i, n) => ({ 
+                offset: `${100 * i / n.length}%`, 
+                color: colorScale(t) 
+            })))
+            .enter()
+            .append("stop")
+            .attr("offset", d => d.offset)
+            .attr("stop-color", d => d.color);
+            
+        // Add rectangle with gradient
+        legend.append("rect")
+            .attr("width", legendWidth)
+            .attr("height", legendHeight)
+            .style("fill", "url(#linear-gradient)");
+            
+        // Add legend axis
+        const legendScale = d3.scaleLinear()
+            .domain([0, d3.max(csvData, d => d.Rate)])
+            .range([0, legendWidth]);
+            
+        const legendAxis = d3.axisBottom(legendScale)
+            .ticks(5)
+            .tickFormat(d => d.toFixed(1));
+            
+        legend.append("g")
+            .attr("transform", `translate(0,${legendHeight})`)
+            .call(legendAxis);
+            
+        // Add legend title
+        legend.append("text")
+            .attr("x", legendWidth / 2)
+            .attr("y", legendHeight + 30)
+            .attr("text-anchor", "middle")
+            .text("Entertainment Places per 1000 Residents");
+            
+
+</script>
+
+<style>
+    .chart-container {
+        display: flex;
+        justify-content: space-between;
+    }
+    .chart-controls {
+        margin-bottom: 20px;
+    }
+    .chart-controls button, 
+    .chart-controls select {
+        margin-right: 10px;
+    }
+    #vertical-chart, 
+    #horizontal-chart {
+        width: 48%;
+    }
+
+
+    /* Cartogram */
+
+    body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .legend {
+            margin-top: 20px;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            pointer-events: none;
+            font-size: 14px;
+        }
+</style>
